@@ -119,9 +119,17 @@ const puppeteer = require('puppeteer');
           if (!svgElement.getAttribute('xmlns:xlink')) {
             svgElement.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
           }
+          if (!svgElement.getAttribute('height')) {
+            svgElement.setAttribute('height', svgElement.height.baseVal.value);
+          }
+          if (!svgElement.getAttribute('width')) {
+            svgElement.setAttribute('width', svgElement.width.baseVal.value);
+          }
           svgElement.querySelectorAll('div').forEach(div => {
             if (!div.getAttribute('xmlns')) {
               div.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+              div.style.whiteSpace = "nowrap";
+              div.style.overflow = "visible";
             }
           });
           return svgElement.parentElement.innerHTML;
