@@ -35,6 +35,7 @@ function parseBounds (val) {
   return {width: list[0], height: list[1]}
 }
 
+let inputFilename = null
 var input = null
 var output = null
 
@@ -54,6 +55,7 @@ program
     'selects a specific diagram', parseInt, 0)
   .arguments('<input> <output>')
   .action(function (newInput, newOutput) {
+    inputFilename = newInput
     input = fs.readFileSync(newInput, 'utf-8')
     output = newOutput
   })
@@ -95,12 +97,12 @@ const puppeteer = require('puppeteer');
   
       await page.setViewport({width: width, height: height})
   
-      const filenameBase = output.split('.');
+      const filenameBase = output == '-' ? inputFilename.split('.') : output.split('.');
       filenameBase.pop();
       if (diagrams.length > 1) {
         filenameBase.push(diagramId);
       }
-      const extension = output.split('.').pop().toLowerCase();
+      const extension = output == '-' ? program.format : output.split('.').pop().toLowerCase();
       const outputFilename = filenameBase.join('.') + '.' + extension;
 
       if (extension === 'pdf') {
