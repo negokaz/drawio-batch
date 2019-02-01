@@ -62,13 +62,14 @@ program
 const puppeteer = require('puppeteer');
 
 (async () => {
-  const browser = await puppeteer.launch({args: ['--no-sandbox', '--disable-web-security']})
+  const browser = await puppeteer.launch({headless: true, args: ['--no-sandbox', '--disable-web-security']})
 
   try {
     await input
     const page = await browser.newPage()
 
     await page.goto('file://' + __dirname + '/drawio/src/main/webapp/export3.html')
+    await page.evaluateHandle('document.fonts.ready');
 
     await page.evaluate(function (xml, format, bounds, scale, diagramId) {
       return render({
@@ -97,19 +98,24 @@ const puppeteer = require('puppeteer');
       // extracts the inline SVG element used for rendering the diagram and puts it into a file with appropriate SVG headers
 
       // get the rendered page content and parse it as XML again
-      var domText = await page.evaluate(() => document.body.innerHTML)
-      var doc = new xmldom.DOMParser().parseFromString('<root>' + domText + '</root>')
-
-      // extract the SVG content and serialize it again
-      var svgNode = xpath.select('//svg', doc)[0]
+      var domText = await page.evaluate(() => {
+        const svgElement = document.querySelector('svg');
+        if (!svgElement.getAttribute('xmlns')) {
+          svgElement.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        }
+        if (!svgElement.getAttribute('xmlns:xlink')) {
+          svgElement.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+        }
+        svgElement.querySelectorAll('div').forEach(div => {
+          if (!div.getAttribute('xmlns')) {
+            div.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+          }
+        });
+        return svgElement.parentElement.innerHTML;
+      });
+      var svgNode = new xmldom.DOMParser().parseFromString(domText)
       var serializer = new xmldom.XMLSerializer()
       var source = serializer.serializeToString(svgNode)
-      if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
-        source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"')
-      }
-      if (!source.match(/^<svg[^>]+"http\:\/\/www\.w3\.org\/1999\/xlink"/)) {
-        source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"')
-      }
       source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
       fs.writeFile(output, source, function(err) {
         if (err) {
