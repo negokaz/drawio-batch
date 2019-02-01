@@ -66,65 +66,78 @@ const puppeteer = require('puppeteer');
 
   try {
     await input
-    const page = await browser.newPage()
+    const doc = new xmldom.DOMParser().parseFromString(input);
+    const diagrams = xpath.select('//diagram', doc);
+    
+    for (let diagramId = 0; diagramId < diagrams.length; diagramId++) {
+      const page = await browser.newPage()
+  
+      await page.goto('file://' + __dirname + '/drawio/src/main/webapp/export3.html')
+      await page.evaluateHandle('document.fonts.ready');
+  
+      await page.evaluate(function (xml, format, bounds, scale, diagramId) {
+        return render({
+          xml: xml,
+          format: format,
+          scale: scale,
+          w: bounds.width,
+          h: bounds.height,
+          from: diagramId,
+        })
+      }, input, program.format, program.bounds, program.scale, diagramId)
+  
+      await page.waitForSelector('#LoadingComplete');
+      var bounds = await page.mainFrame().$eval('#LoadingComplete', div => div.getAttribute('bounds'));
+      var bounds = JSON.parse(bounds);
+  
+      var width = Math.ceil(bounds.x + bounds.width)
+      var height = Math.ceil(bounds.y + bounds.height)
+  
+      await page.setViewport({width: width, height: height})
+  
+      const filenameBase = output.split('.');
+      filenameBase.pop();
+      if (diagrams.length > 1) {
+        filenameBase.push(diagramId);
+      }
+      const extension = output.split('.').pop().toLowerCase();
+      const outputFilename = filenameBase.join('.') + '.' + extension;
 
-    await page.goto('file://' + __dirname + '/drawio/src/main/webapp/export3.html')
-    await page.evaluateHandle('document.fonts.ready');
-
-    await page.evaluate(function (xml, format, bounds, scale, diagramId) {
-      return render({
-        xml: xml,
-        format: format,
-        scale: scale,
-        w: bounds.width,
-        h: bounds.height,
-        from: diagramId,
-      })
-    }, input, program.format, program.bounds, program.scale, program.diagramId)
-
-    await page.waitForSelector('#LoadingComplete');
-    var bounds = await page.mainFrame().$eval('#LoadingComplete', div => div.getAttribute('bounds'));
-    var bounds = JSON.parse(bounds);
-
-    var width = Math.ceil(bounds.x + bounds.width)
-    var height = Math.ceil(bounds.y + bounds.height)
-
-    await page.setViewport({width: width, height: height})
-
-    var extension = output.split('.').pop().toLowerCase()
-    if (extension === 'pdf') {
-      await page.pdf({path: output, width: width, height: height + 1, pageRanges: '1'})
-    } else if (extension === 'svg') {
-      // extracts the inline SVG element used for rendering the diagram and puts it into a file with appropriate SVG headers
-
-      // get the rendered page content and parse it as XML again
-      var domText = await page.evaluate(() => {
-        const svgElement = document.querySelector('svg');
-        if (!svgElement.getAttribute('xmlns')) {
-          svgElement.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        }
-        if (!svgElement.getAttribute('xmlns:xlink')) {
-          svgElement.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
-        }
-        svgElement.querySelectorAll('div').forEach(div => {
-          if (!div.getAttribute('xmlns')) {
-            div.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+      if (extension === 'pdf') {
+        await page.pdf({path: outputFilename, width: width, height: height + 1, pageRanges: '1'})
+      } else if (extension === 'svg') {
+        // extracts the inline SVG element used for rendering the diagram and puts it into a file with appropriate SVG headers
+  
+        // get the rendered page content and parse it as XML again
+        var domText = await page.evaluate(() => {
+          const svgElement = document.querySelector('svg');
+          if (!svgElement.getAttribute('xmlns')) {
+            svgElement.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+          }
+          if (!svgElement.getAttribute('xmlns:xlink')) {
+            svgElement.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+          }
+          svgElement.querySelectorAll('div').forEach(div => {
+            if (!div.getAttribute('xmlns')) {
+              div.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+            }
+          });
+          return svgElement.parentElement.innerHTML;
+        });
+        
+        var svgNode = new xmldom.DOMParser().parseFromString(domText)
+        var serializer = new xmldom.XMLSerializer()
+        var source = serializer.serializeToString(svgNode)
+        source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
+        fs.writeFile(outputFilename, source, function(err) {
+          if (err) {
+            return console.log(err)
           }
         });
-        return svgElement.parentElement.innerHTML;
-      });
-      var svgNode = new xmldom.DOMParser().parseFromString(domText)
-      var serializer = new xmldom.XMLSerializer()
-      var source = serializer.serializeToString(svgNode)
-      source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
-      fs.writeFile(output, source, function(err) {
-        if (err) {
-          return console.log(err)
-        }
-      });
-
-    } else {
-      await page.screenshot({path: output, clip: bounds, quality: process.quality})
+  
+      } else {
+        await page.screenshot({path: outputFilename, clip: bounds, quality: process.quality})
+      }
     }
   } catch (error) {
     console.log(error)
