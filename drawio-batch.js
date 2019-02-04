@@ -3,6 +3,7 @@
 'use strict'
 
 var fs = require('fs')
+var path = require('path')
 var xpath = require('xpath')
 var xmldom = require('xmldom')
 
@@ -97,12 +98,12 @@ const puppeteer = require('puppeteer');
   
       await page.setViewport({width: width, height: height})
   
-      const filenameBase = output == '-' ? inputFilename.split('.') : output.split('.');
+      const filenameBase = fs.statSync(output).isDirectory() ? path.join(output, path.basename(inputFilename)).split('.') : output.split('.');
       filenameBase.pop();
       if (diagrams.length > 1) {
         filenameBase.push(diagramId);
       }
-      const extension = output == '-' ? program.format : output.split('.').pop().toLowerCase();
+      const extension = fs.statSync(output).isDirectory() ? program.format : output.split('.').pop().toLowerCase();
       const outputFilename = filenameBase.join('.') + '.' + extension;
 
       if (extension === 'pdf') {
@@ -135,7 +136,7 @@ const puppeteer = require('puppeteer');
           return svgElement.parentElement.innerHTML;
         });
         
-        var svgNode = new xmldom.DOMParser().parseFromString(domText)
+        var svgNode = new xmldom.DOMParser().parseFromString(domText, 'text/html')
         var serializer = new xmldom.XMLSerializer()
         var source = serializer.serializeToString(svgNode)
         source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
