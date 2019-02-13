@@ -71,12 +71,12 @@ const puppeteer = require('puppeteer');
     await input
     const doc = new xmldom.DOMParser().parseFromString(input);
     const diagrams = xpath.select('//diagram', doc);
+    const page = await browser.newPage()
+
+    await page.goto('file://' + __dirname + '/drawio/src/main/webapp/export3.html')
+    await page.evaluateHandle('document.fonts.ready');
     
     for (let diagramId = 0; diagramId < diagrams.length; diagramId++) {
-      const page = await browser.newPage()
-  
-      await page.goto('file://' + __dirname + '/drawio/src/main/webapp/export3.html')
-      await page.evaluateHandle('document.fonts.ready');
   
       await page.evaluate(function (xml, format, bounds, scale, diagramId) {
         return render({
@@ -149,6 +149,8 @@ const puppeteer = require('puppeteer');
       } else {
         await page.screenshot({path: outputFilename, clip: bounds, quality: process.quality})
       }
+      await page.mainFrame().$eval('#LoadingComplete', div => div.parentNode.removeChild(div))
+      await page.mainFrame().$eval('svg', svg => svg.parentNode.removeChild(svg))
     }
   } catch (error) {
     console.log(error)
